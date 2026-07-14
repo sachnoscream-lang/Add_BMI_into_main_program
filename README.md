@@ -264,3 +264,107 @@ Kiến trúc ở đây giải quyết triệt để bằng cách:
 ---
 
 *Tài liệu cập nhật: 2026-07-12*
+
+---
+
+## 🧭 Phụ lục: Tích hợp BMI160 cho mô phỏng ga theo chuyển động
+
+Phiên bản này đã bổ sung **BMI160** vào `main.cpp` để lấy thêm tín hiệu từ cảm biến quán tính, phục vụ mô phỏng âm thanh động cơ theo:
+
+- **Tăng tốc dương** → tăng `throttle_bmi`
+- **Phanh / gia tốc âm** → **không** làm tăng ga
+- **Sốc / rung mạnh** → nhận diện va chạm
+- **Nghiêng lớn + sốc đủ lâu** → nhận diện té ngã
+
+Mục tiêu là làm âm thanh tự nhiên hơn khi xe rung, tăng tốc, giảm tốc hoặc gặp sự cố cảm biến.
+
+### 🔧 Cấu hình BMI160 đang dùng
+
+| Mục | Giá trị |
+|-----|---------|
+| I2C SDA | GPIO 21 |
+| I2C SCL | GPIO 22 |
+| I2C speed | 400 kHz |
+| BMI160 address | `0x69` |
+| I2C timeout | `50 ms` |
+| LPF alpha | `0.15f` |
+| Ngưỡng tăng tốc | `0.05f` |
+| Ngưỡng sốc | `1.8f` |
+| Ngưỡng nghiêng | `60°` |
+| Giữ trạng thái ngã | `1000 ms` |
+
+### 🔌 Đấu dây BMI160
+
+```text
+BMI160  ->  ESP32
+VCC     ->  3.3V
+GND     ->  GND
+SDA     ->  GPIO 21
+SCL     ->  GPIO 22
+```
+
+> Lưu ý: dùng **3.3V**, không cấp 5V trực tiếp cho BMI160.
+
+### 🚀 Cách dùng với BMI160
+
+1. Nạp firmware bằng PlatformIO như phần hướng dẫn bên trên.
+2. Mở Serial Monitor ở **115200 baud**.
+3. Khi BMI160 hoạt động tốt, monitor sẽ hiện:
+
+```text
+[BMI160] Khoi tao cam bien thanh cong!
+[BLE] Initializing BLE...
+[OK] He thong san sang!
+```
+
+4. Trong lúc chạy, firmware sẽ đọc BMI160 mỗi **20ms** và in log mỗi **300ms**.
+
+### 📟 Log BMI160 trên Serial Monitor
+
+Ví dụ khi xe đang đứng yên:
+
+```text
+===== BMI160 SENSOR DATA =====
+Accel (g)     : X=0.012  Y=-0.004  Z=1.003
+Gyro (dps)    : X=0.120  Y=0.030  Z=-0.010
+Goc nghieng   : Pitch=-0.69  Roll=-0.23
+Trang thai toc: DEU GA (loc LPF=0.008g)
+Su kien va cham: Binh thuong
+===============================
+[OFF] RPM:     0 | THR:   0.0% (POT:  0%, IMU:  0%) | VOL: 100 | RevMix:  50 | ISR: 1234
+```
+
+Ví dụ khi tăng tốc:
+
+```text
+Trang thai toc: TANG TOC (loc LPF=0.123g)
+Su kien va cham: Binh thuong
+[RUNNING] RPM:  2380 | THR:  46.2% (POT:  10%, IMU:  36%) | VOL: 100 | RevMix: 144 | ISR: 9821
+```
+
+Ví dụ khi phanh:
+
+```text
+Trang thai toc: GIAM TOC (loc LPF=-0.094g)
+Su kien va cham: Binh thuong
+[RUNNING] RPM:  1805 | THR:  12.0% (POT:  12%, IMU:   0%) | VOL: 100 | RevMix:  66 | ISR: 10444
+```
+
+Ví dụ khi phát hiện té ngã:
+
+```text
+Su kien va cham: TE NGA
+[OFF] RPM:     0 | THR:  22.0% (POT:  22%, IMU:   0%) | VOL: 100 | RevMix:  50 | ISR: 11002
+```
+
+### 🛡️ Hành vi an toàn đã thêm
+
+- **Không dùng trị tuyệt đối gia tốc** cho phần throttle BMI160, nên phanh không làm tăng RPM.
+- Khi phát hiện **té ngã**, trạng thái OFF được giữ thêm một khoảng an toàn để tránh tự nổ máy lại ngay.
+- Timeout I2C đã giảm xuống **50ms** để tránh treo `loop()` nếu dây cảm biến bị lỏng hoặc mất kết nối.
+
+### 📌 Lưu ý khi test thực tế
+
+- Nên cố định dây I2C thật chắc vì rung xe có thể làm lỏng kết nối.
+- Nếu BMI160 không trả về chip ID đúng, firmware sẽ báo lỗi ngay trên Serial Monitor.
+- Khi muốn kiểm tra riêng phần âm thanh, vẫn có thể dùng biến trở như trước; BMI160 chỉ là nguồn ga phụ trợ.
