@@ -1,1 +1,1 @@
-# T-ch-h-p-c-m-bi-n-BMI-v-o-ch-ng-tr-nh-ch-nh
+Tích hợp cảm biến BMI vào chương trình chính
